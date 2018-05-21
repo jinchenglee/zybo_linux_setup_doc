@@ -26,6 +26,185 @@ Candidates to download (select one of them):
 
 ## Petalinux 
 
+Petalinux design flow is shown in the diagram, which is copied from [`Xilinx: PetaLinux Gettomg Started`](http://www.wiki.xilinx.com/PetaLinux+Getting+Started).
+
+![alt text](./images/petalinux-flow-201310-v6.jpg)
+
+### Intall Petalinux tools
+* Petalinux setup follows the guidelines found [here](https://github.com/Digilent/Petalinux-Zybo). It uses Petalinux 2017.4
+* Dependency and prerequesites:
+```
+sudo -s
+apt-get install tofrodos gawk xvfb git libncurses5-dev tftpd zlib1g-dev zlib1g-dev:i386  \
+                libssl-dev flex bison chrpath socat autoconf libtool texinfo gcc-multilib \
+                libsdl1.2-dev libglib2.0-dev screen pax 
+reboot
+```
+
+* Install and configure the tftp server (this can be skipped if not interested in booting via TFTP)
+```
+sudo -s
+apt-get install tftpd-hpa
+chmod a+w /var/lib/tftpboot/
+reboot
+```
+
+* Create petalinux install dir at /opt/pkg:
+```
+sudo -s
+mkdir -p /opt/pkg/petalinux
+chown <your_user_name> /opt/pkg/
+chgrp <your_user_name> /opt/pkg/
+chgrp <your_user_name> /opt/pkg/petalinux/
+chown <your_user_name> /opt/pkg/petalinux/
+exit
+```
+
+* Download installer from Xilinx and install
+```
+cd ~/Downloads
+./petalinux-v2017.4-final-installer.run /opt/pkg/petalinux
+```
+
+
+### Source the petalinux tools
+
+Whenever you want to run any petalinux commands, you will need to first start by opening a new terminal and "sourcing" the Petalinux environment settings (make sure you are using `bash`):
+
+```
+source /opt/pkg/petalinux/settings.sh
+```
+
+### Download the petalinux project
+
+There are two ways to obtain the project. If you plan on version controlling your project you should clone this repository using the following:
+
+```
+git clone --recursive https://github.com/Digilent/Petalinux-Zybo.git
+```
+If you are not planning on version controlling your project and want a simpler release package, go to https://github.com/Digilent/Petalinux-Zybo/releases/
+and download the most recent .bsp file available there for the version of Petalinux you wish to use.
+
+
+### Generate project
+
+If you have obtained the project source directly from github, then you should simply _cd_ into the Petalinux project directory. If you have downloaded the 
+.bsp, then you must first run the following command to create a new project.
+
+Foe this tutorial, we use [Petalinux-Zybo-2017.4-1.bsp](https://github.com/Digilent/Petalinux-Zybo/releases/download/v2017.4-1/Petalinux-Zybo-2017.4-1.bsp)
+
+```
+petalinux-create -t project -s <path to .bsp file>
+```
+
+This will create a new petalinux project in your current working directory, which you should then _cd_ into.
+
+
+### Run the pre-built image from SD
+
+(Note: The pre-built images are only included with the .bsp release. )
+
+Copy _pre-built/linux/images/BOOT.BIN_ and _pre-built/linux/images/image.ub_ to the first partition of your SD card.
+
+#### Or, alternatively, build image on your own as below.
+
+### Configure petalinux-config
+
+This project is initially configured to have the root file system (rootfs) existing in RAM. This configuration is referred to as "initramfs". A key aspect of this configuration is that changes made to the files (for example in your /home/root/ directory) will not persist after the board has been reset. This may or may not be desirable functionality.
+
+Another side affect of initramfs is that if the root filesystem becomes too large (which is common if you add many features with "petalinux-config -c rootfs) then the system may experience poor performance (due to less available system memory). Also, if the uncompressed rootfs is larger than 128 MB, then booting with initramfs will fail unless you make modifications to u-boot (see note at the end of the "Managing Image Size" section of UG1144).
+
+For those that want file modifications to persist through reboots, or that require a large rootfs, the petalinux system can be configured to instead use a filesystem that exists on the second partition of the microSD card. This will allow all 512 MiB of memory to be used as system memory, and for changes that are made to it to persist in non-volatile storage. To configure the system to use SD rootfs, write the generated root fs to the SD, and then boot the system, do the following:
+
+Start by running 
+```
+petalinux-config
+```
+and setting the following option to "SD":
+```
+ -> Image Packaging Configuration -> Root filesystem type
+```
+
+Next, open project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi in a text editor and locate the "bootargs" line. It should read as follows:
+
+`
+		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio";
+`
+
+Replace that line with the following before saving and closing system-user.dtsi:
+
+`
+		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=/dev/mmcblk0p2 rwrootwait";
+`
+
+### Configure linux kernel
+(See kernel customization details in 'USB wifi dongle' section below)
+```
+petalinux-config -c kernel
+```
+For example, Set (to 'y') the following options (leave any additional options that appear as their defaults):
+Networking Support -> Wireless -> cfg80211 - wireless configuration API
+Networking Support -> Wireless -> Generic IEEE 802.11 Networking Stack (mac80211)
+Device Drivers -> Network device support -> Wireless LAN
+Device Drivers -> Network device support -> Wireless LAN -> Realtek rtlwifi family of devices -> Realtek RTL8192CU/RTL8188CU USB Wireless Network
+Device Drivers-> Multimedia support->
+Media USB Adapters -> USB Video Class (UVC)
+Device Drivers -> DMA engine support -> Async_tx: Offload support for the async_tx api
+Floating point emulation -> Support for NEON in kernel mode
+...
+
+### Build the petalinux project
+
+Run the following commands to build the petalinux project with the default options (before build, you can _customize your kernel_, e.g. enable wifi usb dongle as mentioned in next session):
+
+```
+petalinux-build
+petalinux-package --boot --force --fsbl images/linux/zynq_fsbl.elf --fpga images/linux/system_wrapper.bit --u-boot
+```
+
+To boot the newly built files from SD, copy the BOOT.BIN and image.ub files found in _images/linux_ to first partition of SD card.
+
+
+### Use third-party root file system 
+It is possible to use a third party prebuilt rootfs (such as a Linaro Ubuntu image) instead of the petalinux generated rootfs. To do this, just copy the prebuilt image to the second partition instead of running the "dd" command above. 
+
+For example, uncompress the downloaded root FS to second partition of SD card (ext4 formatted partition labeled 'ROOT_FS') as below:
+
+```
+tar xf ubuntu-16.04.2-minimal-armhf-2017-06-18.tar.xz
+sudo tar xfvp ./*-*-*-armhf-*/armhf-rootfs-*.tar -C <path>/ROOT_FS/
+sync
+```
+
+Or
+```
+sudo tar xf linaro-jessie-developer-20161117-32.tar.gz --strip-components=1 -C <path>/ROOT_FS/
+```
+
+If the kernel has been customized, '/lib/firmware' and '/lib/modules' should be installed appropriately. See details in below section 'USB wifi dongle issue'.
+
+
+### Prepare for release
+
+This section is only relevant for those who wish to upstream their work or version control their own project correctly on Github.
+Note the project should be released configured as initramfs for consistency, unless there is very good reason to release it with SD rootfs.
+
+```
+petalinux-package --prebuilt --clean --fpga images/linux/system_wrapper.bit -a images/linux/image.ub:images/image.ub 
+petalinux-build -x distclean
+petalinux-build -x mrproper
+petalinux-package --bsp --force --output ../releases/Petalinux-Zybo-20XX.X-X.bsp -p ./
+cd ..
+git status # to double-check
+git add .
+git commit
+git push
+```
+Finally, open a browser and go to github to push your .bsp as a release.
+
+
+
+
 ## Misc issues 
 ### USB wifi dongle issue
 When booting Ubuntu 16.04 on Zybo, 'lsusb' can recognize the device, but 'dmesg' shows the firmware is missing. Also, the wlan0 interface is renamed.
@@ -135,6 +314,68 @@ ping 8.8.8.8
 Now 'wlan0' should show up when 'ifcofing':
 ```
 ```
+
+
+
+### Configure SD rootfs built from petalinux
+
+This project is initially configured to have the root file system (rootfs) existing in RAM. This configuration is referred to as "initramfs". A key 
+aspect of this configuration is that changes made to the files (for example in your /home/root/ directory) will not persist after the board has been reset. 
+This may or may not be desirable functionality.
+
+Another side affect of initramfs is that if the root filesystem becomes too large (which is common if you add many features with "petalinux-config -c rootfs)
+ then the system may experience poor performance (due to less available system memory). Also, if the uncompressed rootfs is larger than 128 MB, then booting
+ with initramfs will fail unless you make modifications to u-boot (see note at the end of the "Managing Image Size" section of UG1144).
+
+For those that want file modifications to persist through reboots, or that require a large rootfs, the petalinux system can be configured to instead use a 
+filesystem that exists on the second partition of the microSD card. This will allow all 512 MiB of memory to be used as system memory, and for changes that 
+are made to it to persist in non-volatile storage. To configure the system to use SD rootfs, write the generated root fs to the SD, and then boot the system, 
+do the following:
+
+Start by running petalinux-config and setting the following option to "SD":
+
+```
+ -> Image Packaging Configuration -> Root filesystem type
+```
+
+Next, open project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi in a text editor and locate the "bootargs" line. It should read as follows:
+
+`
+		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio";
+`
+
+Replace that line with the following before saving and closing system-user.dtsi:
+
+`
+		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=/dev/mmcblk0p2 rw rootwait";
+`
+
+(Note: If you wish to change back to initramfs in the future, you will need to undo this change to the bootargs line.)
+
+Then run petalinux-build to build your system. After the build completes, your rootfs image will be at images/linux/rootfs.ext4.
+
+Copy _images/linux/BOOT.BIN_ and _images/linux/image.ub_ to the first partition of your SD card.
+
+Identify the /dev/ node for the second partition of your SD card using _lsblk_ at the command line. It will likely take the form of /dev/sdX2, where X is 
+_a_,_b_,_c_,etc.. Then run the following command to copy the filesystem to the second partition:
+
+#### Warning! If you use the wrong /dev/ node in the following command, you will overwrite your computer's file system. BE CAREFUL
+
+```
+sudo umount /dev/sdX2
+sudo dd if=images/linux/rootfs.ext4 of=/dev/sdX2
+sync
+```
+
+The following commands will also stretch the file system so that you can use the additional space of your SD card. Be sure to replace the
+block device node as you did above:
+
+```
+sudo resize2fs /dev/sdX2
+sync
+```
+
+
 
 
 ## References
