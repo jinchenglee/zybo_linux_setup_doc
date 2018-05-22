@@ -1,4 +1,4 @@
-
+~~~~
 # Setup Linux System on Zybo (zynq7010)
 Document the process to setup linux on Zybo (zynq 7010) board.
 
@@ -134,7 +134,7 @@ Next, open project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi
 Replace that line with the following before saving and closing system-user.dtsi:
 
 `
-		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=/dev/mmcblk0p2 rwrootwait";
+		bootargs = "console=ttyPS0,115200 earlyprintk uio_pdrv_genirq.of_id=generic-uio root=/dev/mmcblk0p2 rw rootwait";
 `
 
 ### Configure linux kernel
@@ -174,6 +174,8 @@ For example, uncompress the downloaded root FS to second partition of SD card (e
 tar xf ubuntu-16.04.2-minimal-armhf-2017-06-18.tar.xz
 sudo tar xfvp ./*-*-*-armhf-*/armhf-rootfs-*.tar -C <path>/ROOT_FS/
 sync
+sudo chown root:root /media/rootfs/
+sudo chmod 755 /media/rootfs/
 ```
 
 Or
