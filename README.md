@@ -1,4 +1,4 @@
-~~~~
+
 # Setup Linux System on Zybo (zynq7010)
 Document the process to setup linux on Zybo (zynq 7010) board.
 
