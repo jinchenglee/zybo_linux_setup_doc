@@ -29,8 +29,22 @@ sudo rsync -av installation/ /usr/local
 ```
 to copy the different files to the corresponding places.
 
+
+## Issues
+
+### GLIBXX related
 If when trying to import cv2 there is an error about not finding the corresponding GLIBXX version in the board as the one used to compile, try upgrading g++ to the appropiate version. For example, for GLIBCXX_3.4.22 execute
 ```
 sudo apt upgrade g++-6
 ```
 The complete process will vary depending on processing speed, Internet connection and packages already present, but in my case took just under 30 minutes from launching the script to receiving the folder in the board.
+
+### libopencv_core.so.* cannot open shared object file
+
+The error occurs when 'import cv2' in python or similar C++ code usage.
+
+After the rsync operations on target board, do below to "populate" the installed libraries:
+
+```
+sudo ldconfig -v
+```
