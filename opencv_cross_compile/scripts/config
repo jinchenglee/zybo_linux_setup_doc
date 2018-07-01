@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+export NAME="ubuntu"
+export ADDRESS="192.168.1.21"
+export ARCHITECTURE="arm-linux-gnueabihf"
+# If the password is provided the transfer of files from/to the board will be
+# done automatically, otherwise it will be asked for every time it's needed.
+export PASSWORD=""

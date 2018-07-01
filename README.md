@@ -378,6 +378,8 @@ sync
 ```
 
 
+## OpenCV cross compile
+Please look at readme.md under sub-directory: opencv_cross_compile.
 
 
 ## References
